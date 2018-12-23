@@ -1,9 +1,0 @@
-<br>
-{{if .Query}}
-{{if .Books}}
-<center>{{len .Books}} books found</center>
-{{else}}
-<center>No books were found matching your query "{{.Query}}"</center>
-{{end}}
-{{template "books" .}}
-{{end}}
