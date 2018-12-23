@@ -1,32 +1,12 @@
-# github.com/dropbox/dropbox-sdk-go-unofficial v5.4.0+incompatible
-github.com/dropbox/dropbox-sdk-go-unofficial/dropbox
-github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/files
-github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/async
-github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/auth
-github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/file_properties
 # github.com/gobuffalo/packr v1.13.1
 github.com/gobuffalo/packr
-# github.com/golang/protobuf v1.2.0
-github.com/golang/protobuf/proto
 # github.com/julienschmidt/httprouter v0.0.0-20170430222011-975b5c4c7c21
 github.com/julienschmidt/httprouter
 # github.com/pkg/errors v0.8.0
 github.com/pkg/errors
 # github.com/spf13/pflag v1.0.3
 github.com/spf13/pflag
+# github.com/tj/go-dropbox v0.0.0-20171107035848-42dd2be3662d
+github.com/tj/go-dropbox
 # github.com/unrolled/render v0.0.0-20171006150303-32bf1ea2a39e
 github.com/unrolled/render
-# golang.org/x/net v0.0.0-20180811021610-c39426892332
-golang.org/x/net/context
-golang.org/x/net/context/ctxhttp
-# golang.org/x/oauth2 v0.0.0-20181203162652-d668ce993890
-golang.org/x/oauth2
-golang.org/x/oauth2/internal
-# google.golang.org/appengine v1.4.0
-google.golang.org/appengine/urlfetch
-google.golang.org/appengine/internal
-google.golang.org/appengine/internal/urlfetch
-google.golang.org/appengine/internal/base
-google.golang.org/appengine/internal/datastore
-google.golang.org/appengine/internal/log
-google.golang.org/appengine/internal/remote_api

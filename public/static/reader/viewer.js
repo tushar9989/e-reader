@@ -34,14 +34,20 @@ var MIN_SCALE = 0.25;
 var MAX_SCALE = 10.0;
 var DEFAULT_SCALE_VALUE = 'auto';
 var DEFAULT_URL = findGetParameter("file");
+var PAGE = findGetParameter("page");
 
 if (DEFAULT_URL == null) {
   DEFAULT_URL = '../reader/pdf/web/compressed.tracemonkey-pldi-09.pdf';
 }
 
+if (PAGE == null || +PAGE == NaN || +PAGE <= 0) {
+  PAGE = 1;
+} else {
+  PAGE = +PAGE
+}
+
 function toggleFullscreen() {
   document.getElementById("viewerContainer").classList.toggle('full-screen');
-  //document.body.classList.toggle('full-screen');
   document.getElementsByTagName("header")[0].classList.toggle('full-screen');
   document.getElementsByTagName("footer")[0].classList.toggle('full-screen');
 }
@@ -370,10 +376,12 @@ var PDFViewerApplication = {
     document.addEventListener('pagesinit', function () {
       // We can use pdfViewer now, e.g. let's change default scale.
       pdfViewer.currentScaleValue = DEFAULT_SCALE_VALUE;
+      PDFViewerApplication.page = PAGE;
     });
 
     document.addEventListener('updateviewarea', function (evt) {
       var page = evt.location.pageNumber;
+      saveHistory(DEFAULT_URL, page)
       var numPages = PDFViewerApplication.pagesCount;
 
       document.getElementById('pageNumber').value = page;
@@ -402,6 +410,37 @@ PDFViewerApplication.animationStartedPromise.then(function () {
     url: DEFAULT_URL,
   });
 });
+
+var saveHistory = debounce(function(name, page) {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/history/set/" + name.split("/")[2] + "/" + page, true);
+  xhr.onload = function () {
+    if (xhr.readyState === 4) {
+      if (xhr.status !== 201) {
+        console.error("save history failed.", xhr.statusText);
+      }
+    }
+  };
+  xhr.onerror = function () {
+    console.error(xhr.statusText);
+  };
+  xhr.send(null);
+}, 1000 * 20);
+
+function debounce(func, wait, immediate) {
+	var timeout;
+	return function() {
+		var context = this, args = arguments;
+		var later = function() {
+			timeout = null;
+			if (!immediate) func.apply(context, args);
+		};
+		var callNow = immediate && !timeout;
+		clearTimeout(timeout);
+		timeout = setTimeout(later, wait);
+		if (callNow) func.apply(context, args);
+	};
+};
 
 function findGetParameter(parameterName) {
   var result = null,
