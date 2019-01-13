@@ -113,7 +113,7 @@ func (repo *DropboxRepository) GetHistory(ID string) (page int, err error) {
 				return
 			}
 
-			if item.page, err = strconv.Atoi(pageStr); err != nil {
+			if item.page, err = strconv.Atoi(strings.Trim(pageStr, "\n")); err != nil {
 				return
 			}
 
