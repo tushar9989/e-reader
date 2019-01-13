@@ -9,9 +9,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/geek1011/BookBrowser/books"
-	"github.com/geek1011/BookBrowser/dropbox"
-	"github.com/geek1011/BookBrowser/history"
+	"github.com/geek1011/BookBrowser/book"
 	"github.com/geek1011/BookBrowser/public"
 	"github.com/julienschmidt/httprouter"
 	"github.com/unrolled/render"
@@ -23,8 +21,7 @@ type Server struct {
 	Verbose bool
 	router  *httprouter.Router
 	render  *render.Render
-	dbx     dropbox.Dropbox
-	history *history.History
+	repo    book.Repository
 }
 
 // NewServer creates a new BookBrowser server. It will not index the books automatically.
@@ -37,10 +34,9 @@ func NewServer(addr string, verbose bool, token string) *Server {
 		Addr:    addr,
 		Verbose: verbose,
 		router:  httprouter.New(),
-		dbx:     dropbox.New(token),
+		repo:    book.NewDropboxRepository(token, "/history"),
 	}
 
-	s.history = history.New(s.dbx, "/history.json")
 	s.initRender()
 	s.initRouter()
 	return s
@@ -103,11 +99,17 @@ func (s *Server) initRouter() {
 		if err != nil || id == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			io.WriteString(w, "Invalid request")
-			log.Printf("Error handling request for %s: %s\n", req.URL.Path, err)
+			log.Printf("Error handling request for %s: %v\n", req.URL.Path, err)
 			return
 		}
 
-		s.history.Set(id, page)
+		if err = s.repo.UpdateHistory(id, page); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			io.WriteString(w, "Request failed")
+			log.Printf("Error handling request for %s: %v\n", req.URL.Path, err)
+			return
+		}
+
 		w.WriteHeader(http.StatusCreated)
 	})
 
@@ -120,27 +122,34 @@ func (s *Server) initRouter() {
 			return
 		}
 
-		io.WriteString(w, fmt.Sprintf("%d", s.history.Get(id)))
+		page, err := s.repo.GetHistory(id)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			io.WriteString(w, "Request failed")
+			log.Printf("Error handling request for %s: %v\n", req.URL.Path, err)
+			return
+		}
+
+		io.WriteString(w, fmt.Sprintf("%d", page))
 	})
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	meta, rd, err := s.dbx.Download(p.ByName("id"))
+	book, data, err := s.repo.Download(p.ByName("id"))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		io.WriteString(w, "Error handling request")
 		log.Printf("Error handling request for %s: %v\n", r.URL.Path, err)
 		return
 	}
+	defer data.Close()
 
 	w.Header().Set("Cache-Control", "max-age=2592000")
 	w.Header().Set(
-		"Content-Disposition", `attachment; filename="`+regexp.MustCompile("[[:^ascii:]]").ReplaceAllString(meta.Name, "_")+`"`)
+		"Content-Disposition", `attachment; filename="`+regexp.MustCompile("[[:^ascii:]]").ReplaceAllString(book.Name(), "_")+`"`)
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("X-Book-Revision", meta.Rev)
 
-	_, err = io.Copy(w, rd)
-	rd.Close()
+	_, err = io.Copy(w, data)
 	if err != nil {
 		log.Printf("Error handling request for %s: %v\n", r.URL.Path, err)
 	}
@@ -149,7 +158,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, p httpro
 }
 
 func (s *Server) handleBooks(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	bl, err := books.Load("/books", s.dbx)
+	bl, err := s.repo.List("/books")
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		io.WriteString(w, "Error handling request")
