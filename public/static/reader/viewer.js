@@ -33,17 +33,11 @@ var DEFAULT_SCALE_DELTA = 1.1;
 var MIN_SCALE = 0.25;
 var MAX_SCALE = 10.0;
 var DEFAULT_SCALE_VALUE = 'auto';
-var DEFAULT_URL = findGetParameter("file");
-var PAGE = findGetParameter("page");
+var BOOK_ID = findGetParameter("id");
+var DEFAULT_URL = '../reader/pdf/web/compressed.tracemonkey-pldi-09.pdf';
 
-if (DEFAULT_URL == null) {
-  DEFAULT_URL = '../reader/pdf/web/compressed.tracemonkey-pldi-09.pdf';
-}
-
-if (PAGE == null || +PAGE == NaN || +PAGE <= 0) {
-  PAGE = 1;
-} else {
-  PAGE = +PAGE
+if (BOOK_ID !== null) {
+  DEFAULT_URL = '/download/' + BOOK_ID;
 }
 
 function toggleFullscreen() {
@@ -110,23 +104,16 @@ var PDFViewerApplication = {
       self.setTitleUsingMetadata(pdfDocument);
     }, function (exception) {
       var message = exception && exception.message;
-      var l10n = self.l10n;
       var loadingErrorMessage;
 
       if (exception instanceof pdfjsLib.InvalidPDFException) {
-        // change error message also for other builds
-        loadingErrorMessage = l10n.get('invalid_file_error', null,
-          'Invalid or corrupted PDF file.');
+        loadingErrorMessage = 'Invalid or corrupted PDF file.';
       } else if (exception instanceof pdfjsLib.MissingPDFException) {
-        // special message for missing PDFs
-        loadingErrorMessage = l10n.get('missing_file_error', null,
-          'Missing PDF file.');
+        loadingErrorMessage = 'Missing PDF file.';
       } else if (exception instanceof pdfjsLib.UnexpectedResponseException) {
-        loadingErrorMessage = l10n.get('unexpected_response_error', null,
-          'Unexpected server response.');
+        loadingErrorMessage = 'Unexpected server response.';
       } else {
-        loadingErrorMessage = l10n.get('loading_error', null,
-          'An error occurred while loading the PDF.');
+        loadingErrorMessage = 'An error occurred while loading the PDF.';
       }
 
       loadingErrorMessage.then(function (msg) {
@@ -376,17 +363,36 @@ var PDFViewerApplication = {
     document.addEventListener('pagesinit', function () {
       // We can use pdfViewer now, e.g. let's change default scale.
       pdfViewer.currentScaleValue = DEFAULT_SCALE_VALUE;
-      PDFViewerApplication.page = PAGE;
+      PDFViewerApplication.page = 1;
+
+      makeRequest(
+        "/history/get/" + BOOK_ID,
+        "GET",
+        function(xhr) {
+          if (xhr.status !== 200) {
+            console.error("get history failed.", xhr.statusText);
+          }
+
+          var PAGE = +xhr.response;
+          if (PAGE != NaN && PAGE > 1) {
+            PDFViewerApplication.page = PAGE;
+            CURRENT_PAGE = PAGE;
+          }
+        }
+      )
+
+      setInterval(saveHistory, 10000);
     });
 
     document.addEventListener('updateviewarea', function (evt) {
       var page = evt.location.pageNumber;
-      saveHistory(DEFAULT_URL, page)
       var numPages = PDFViewerApplication.pagesCount;
 
       document.getElementById('pageNumber').value = page;
       document.getElementById('previous').disabled = (page <= 1);
       document.getElementById('next').disabled = (page >= numPages);
+
+      updateCurrentPage(page);
     }, true);
   },
 };
@@ -411,21 +417,30 @@ PDFViewerApplication.animationStartedPromise.then(function () {
   });
 });
 
-var saveHistory = debounce(function(name, page) {
-  var xhr = new XMLHttpRequest();
-  xhr.open("GET", "/history/set/" + name.split("/")[2] + "/" + page, true);
-  xhr.onload = function () {
-    if (xhr.readyState === 4) {
-      if (xhr.status !== 201) {
-        console.error("save history failed.", xhr.statusText);
+var CURRENT_PAGE = 1;
+var NEEDS_UPDATE = false;
+
+var updateCurrentPage = debounce(function(page) {
+  if (CURRENT_PAGE !== page) {
+    CURRENT_PAGE = page;
+    NEEDS_UPDATE = true;
+  }
+}, 250);
+
+var saveHistory = function() {
+  if (NEEDS_UPDATE) {
+    makeRequest(
+      "/history/set/" + BOOK_ID + "/" + CURRENT_PAGE,
+      "POST",
+      function(xhr) {
+        if (xhr.status !== 201) {
+          console.error("save history failed.", xhr.statusText);
+        }
+        NEEDS_UPDATE = false;
       }
-    }
-  };
-  xhr.onerror = function () {
-    console.error(xhr.statusText);
-  };
-  xhr.send(null);
-}, 1000 * 20);
+    )
+  }
+};
 
 function debounce(func, wait, immediate) {
 	var timeout;
@@ -453,4 +468,20 @@ function findGetParameter(parameterName) {
         if (tmp[0] === parameterName) result = decodeURIComponent(tmp[1]);
       });
   return result;
+}
+
+function makeRequest(url, method, callback) {
+  var xhr = new XMLHttpRequest();
+  xhr.open(method, url, true);
+  xhr.onload = function () {
+    if (xhr.readyState === 4) {
+      callback(xhr);
+    } else {
+      console.error(xhr.statusText);
+    }
+  };
+  xhr.onerror = function () {
+    console.error(xhr.statusText);
+  };
+  xhr.send(null);
 }

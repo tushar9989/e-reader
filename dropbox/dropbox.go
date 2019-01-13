@@ -3,21 +3,25 @@ package dropbox
 import (
 	"io"
 
-	dropbox "github.com/tj/go-dropbox"
+	dbx "github.com/dropbox/dropbox-sdk-go-unofficial/dropbox"
+	dropbox "github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/files"
 )
 
 type Dropbox struct {
-	client *dropbox.Client
+	client dropbox.Client
 }
 
 func New(token string) (d Dropbox) {
-	d.client = dropbox.New(dropbox.NewConfig(token))
+	d.client = dropbox.New(dbx.Config{
+		Token: token,
+	})
+
 	return
 }
 
-func (d Dropbox) Get(path string) (list []dropbox.Metadata, err error) {
-	var res *dropbox.ListFolderOutput
-	if res, err = d.client.Files.ListFolder(&dropbox.ListFolderInput{
+func (d Dropbox) Get(path string) (list []*dropbox.FileMetadata, err error) {
+	var res *dropbox.ListFolderResult
+	if res, err = d.client.ListFolder(&dropbox.ListFolderArg{
 		Path: path,
 	}); err != nil {
 		return
@@ -25,12 +29,17 @@ func (d Dropbox) Get(path string) (list []dropbox.Metadata, err error) {
 
 	for {
 		for _, item := range res.Entries {
-			list = append(list, *item)
+			meta, ok := item.(*dropbox.FileMetadata)
+			if !ok {
+				continue
+			}
+
+			list = append(list, meta)
 		}
 
 		if res.HasMore {
-			if res, err = d.client.Files.ListFolderContinue(
-				&dropbox.ListFolderContinueInput{
+			if res, err = d.client.ListFolderContinue(
+				&dropbox.ListFolderContinueArg{
 					Cursor: res.Cursor,
 				}); err != nil {
 				return
@@ -44,32 +53,33 @@ func (d Dropbox) Get(path string) (list []dropbox.Metadata, err error) {
 }
 
 func (d Dropbox) Download(path string) (
-	data io.ReadCloser, err error,
+	res *dropbox.FileMetadata, data io.ReadCloser, err error,
 ) {
-	var out *dropbox.DownloadOutput
-	if out, err = d.client.Files.Download(&dropbox.DownloadInput{
+	if res, data, err = d.client.Download(&dropbox.DownloadArg{
 		Path: path,
 	}); err != nil {
 		return
 	}
 
-	data = out.Body
 	return
 }
 
 func (d Dropbox) Upload(
-	path string, data io.Reader,
-) (meta dropbox.Metadata, err error) {
-	out, err := d.client.Files.Upload(&dropbox.UploadInput{
-		Mute:   true,
-		Mode:   dropbox.WriteModeOverwrite,
-		Path:   path,
-		Reader: data,
-	})
-	if err != nil {
+	path string, rev string, data io.Reader,
+) (meta *dropbox.FileMetadata, err error) {
+	if meta, err = d.client.Upload(&dropbox.CommitInfo{
+		Mute:           true,
+		StrictConflict: true,
+		Mode: &dropbox.WriteMode{
+			Tagged: dbx.Tagged{
+				Tag: dropbox.WriteModeUpdate,
+			},
+			Update: rev,
+		},
+		Path: path,
+	}, data); err != nil {
 		return
 	}
 
-	meta = out.Metadata
 	return
 }

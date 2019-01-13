@@ -3,13 +3,13 @@ package history
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"sync"
 	"time"
 
+	dbx "github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/files"
 	"github.com/geek1011/BookBrowser/dropbox"
 )
 
@@ -17,17 +17,16 @@ type History struct {
 	pageMap     map[string]int
 	mut         sync.Mutex
 	dbx         dropbox.Dropbox
-	path        string
+	meta        *dbx.FileMetadata
 	needsBackup bool
 }
 
 func New(dbx dropbox.Dropbox, path string) (history *History) {
 	history = new(History)
 	history.dbx = dbx
-	history.path = path
 	go history.periodicBackup()
 
-	if err := history.load(); err != nil {
+	if err := history.load(path); err != nil {
 		log.Printf("load from dropbox failed. %s", err.Error())
 		history.pageMap = make(map[string]int)
 	}
@@ -35,9 +34,9 @@ func New(dbx dropbox.Dropbox, path string) (history *History) {
 	return
 }
 
-func (history *History) load() (err error) {
+func (history *History) load(path string) (err error) {
 	var reader io.ReadCloser
-	if reader, err = history.dbx.Download(history.path); err != nil {
+	if history.meta, reader, err = history.dbx.Download(path); err != nil {
 		return
 	}
 	defer reader.Close()
@@ -54,12 +53,13 @@ func (history *History) load() (err error) {
 	return
 }
 
+// TODO: add a repo with an interface
+// and then make dropbox repo that backs up locally and on dropbox
 func (history *History) periodicBackup() {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(30 * time.Second)
 	for range ticker.C {
 		history.mut.Lock()
 		if history.needsBackup {
-			fmt.Println(history.pageMap)
 			data, err := json.Marshal(history.pageMap)
 			history.needsBackup = false
 			history.mut.Unlock()
@@ -68,8 +68,9 @@ func (history *History) periodicBackup() {
 				continue
 			}
 
-			_, err = history.dbx.Upload(history.path, bytes.NewReader(data))
-			if err != nil {
+			if history.meta, err = history.dbx.Upload(
+				history.meta.PathLower, history.meta.Rev, bytes.NewReader(data),
+			); err != nil {
 				log.Printf("writing to dropbox failed. reason: %v", err)
 				continue
 			}
@@ -82,20 +83,20 @@ func (history *History) periodicBackup() {
 	}
 }
 
-func (history *History) Get(name string) int {
+func (history *History) Get(id string) int {
 	history.mut.Lock()
 	defer history.mut.Unlock()
-	if page, ok := history.pageMap[name]; ok {
+	if page, ok := history.pageMap[id]; ok {
 		return page
 	}
 
 	return 1
 }
 
-func (history *History) Set(name string, page int) {
+func (history *History) Set(id string, page int) {
 	history.mut.Lock()
 	defer history.mut.Unlock()
 	history.needsBackup = true
-	history.pageMap[name] = page
-	log.Printf("Updated page for %s to %d", name, page)
+	history.pageMap[id] = page
+	log.Printf("Updated page for %s to %d", id, page)
 }

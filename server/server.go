@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -90,47 +91,58 @@ func (s *Server) initRouter() {
 	})
 
 	s.router.GET("/books", s.handleBooks)
-	s.router.GET("/books/:name", s.handleBook)
-
-	s.router.GET("/download/:name", s.handleDownload)
+	s.router.GET("/download/:id", s.handleDownload)
 
 	s.router.GET("/static/*filepath", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		http.FileServer(public.Box).ServeHTTP(w, req)
 	})
 
-	s.router.GET("/history/set/:name/:page", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		name := ps.ByName("name")
+	s.router.POST("/history/set/:id/:page", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		id := ps.ByName("id")
 		page, err := strconv.Atoi(ps.ByName("page"))
-		if err != nil || name == "" {
+		if err != nil || id == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			io.WriteString(w, "Invalid request")
 			log.Printf("Error handling request for %s: %s\n", req.URL.Path, err)
 			return
 		}
 
-		s.history.Set(name, page)
+		s.history.Set(id, page)
 		w.WriteHeader(http.StatusCreated)
+	})
+
+	s.router.GET("/history/get/:id", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		id := ps.ByName("id")
+		if id == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, "Invalid request")
+			log.Printf("Error handling request for %s\n", req.URL.Path)
+			return
+		}
+
+		io.WriteString(w, fmt.Sprintf("%d", s.history.Get(id)))
 	})
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	name := p.ByName("name")
-	rd, err := s.dbx.Download("/books/" + name)
+	meta, rd, err := s.dbx.Download(p.ByName("id"))
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		io.WriteString(w, "Error handling request")
-		log.Printf("Error handling request for %s: %s\n", r.URL.Path, err)
+		log.Printf("Error handling request for %s: %v\n", r.URL.Path, err)
 		return
 	}
 
 	w.Header().Set("Cache-Control", "max-age=2592000")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+regexp.MustCompile("[[:^ascii:]]").ReplaceAllString(name, "_")+`"`)
+	w.Header().Set(
+		"Content-Disposition", `attachment; filename="`+regexp.MustCompile("[[:^ascii:]]").ReplaceAllString(meta.Name, "_")+`"`)
 	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("X-Book-Revision", meta.Rev)
 
 	_, err = io.Copy(w, rd)
 	rd.Close()
 	if err != nil {
-		log.Printf("Error handling request for %s: %s\n", r.URL.Path, err)
+		log.Printf("Error handling request for %s: %v\n", r.URL.Path, err)
 	}
 
 	return
@@ -151,19 +163,4 @@ func (s *Server) handleBooks(w http.ResponseWriter, r *http.Request, _ httproute
 		"Title":            "",
 		"Books":            bl,
 	})
-}
-
-func (s *Server) handleBook(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	name := p.ByName("name")
-	s.render.HTML(w, http.StatusOK, "book", map[string]interface{}{
-		"PageTitle":        name,
-		"ShowViewSelector": false,
-		"Title":            "",
-		"Book": books.Book{
-			Name: name,
-			Path: "/books/" + name,
-			Page: s.history.Get(name),
-		},
-	})
-	return
 }

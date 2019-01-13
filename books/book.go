@@ -7,9 +7,8 @@ import (
 )
 
 type Book struct {
+	ID   string
 	Name string
-	Path string
-	Page int
 }
 
 func Load(path string, dbx dropbox.Dropbox) (books []Book, err error) {
@@ -21,9 +20,8 @@ func Load(path string, dbx dropbox.Dropbox) (books []Book, err error) {
 	for _, file := range files {
 		if strings.Contains(file.Name, ".pdf") {
 			books = append(books, Book{
+				ID:   file.Id,
 				Name: file.Name,
-				Path: file.PathLower,
-				Page: 1,
 			})
 		}
 	}
