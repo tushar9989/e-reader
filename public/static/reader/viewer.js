@@ -29,6 +29,7 @@ var CMAP_PACKED = true;
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.0.943/build/pdf.worker.js';
 
+var HISTORY_VERSION;
 var DEFAULT_SCALE_DELTA = 1.1;
 var MIN_SCALE = 0.25;
 var MAX_SCALE = 10.0;
@@ -365,6 +366,10 @@ var PDFViewerApplication = {
       pdfViewer.currentScaleValue = DEFAULT_SCALE_VALUE;
       PDFViewerApplication.page = 1;
 
+      if (BOOK_ID === null) {
+        return
+      }
+
       makeRequest(
         "/history/get/" + BOOK_ID,
         "GET",
@@ -373,7 +378,9 @@ var PDFViewerApplication = {
             console.error("get history failed.", xhr.statusText);
           }
 
-          var PAGE = +xhr.response;
+          var res = JSON.parse(xhr.response);
+          var PAGE = res.page;
+          HISTORY_VERSION = res.version;
           if (PAGE != NaN && PAGE > 1) {
             PDFViewerApplication.page = PAGE;
             CURRENT_PAGE = PAGE;
@@ -428,15 +435,27 @@ var updateCurrentPage = debounce(function(page) {
 }, 250);
 
 var saveHistory = function() {
+  if (BOOK_ID === null) {
+    return
+  }
+
   if (NEEDS_UPDATE) {
     makeRequest(
-      "/history/set/" + BOOK_ID + "/" + CURRENT_PAGE,
+      "/history/set/" + BOOK_ID,
       "POST",
       function(xhr) {
         if (xhr.status !== 201) {
           console.error("save history failed.", xhr.statusText);
+          return
         }
         NEEDS_UPDATE = false;
+
+        var res = JSON.parse(xhr.response);
+        HISTORY_VERSION = res.version;
+      },
+      {
+        "page": CURRENT_PAGE,
+        "version": HISTORY_VERSION
       }
     )
   }
@@ -470,7 +489,7 @@ function findGetParameter(parameterName) {
   return result;
 }
 
-function makeRequest(url, method, callback) {
+function makeRequest(url, method, callback, data) {
   var xhr = new XMLHttpRequest();
   xhr.open(method, url, true);
   xhr.onload = function () {
@@ -480,8 +499,14 @@ function makeRequest(url, method, callback) {
       console.error(xhr.statusText);
     }
   };
+
   xhr.onerror = function () {
     console.error(xhr.statusText);
   };
-  xhr.send(null);
+
+  if (data == undefined) {
+    xhr.send(null);
+  } else {
+    xhr.send(JSON.stringify(data))
+  }
 }

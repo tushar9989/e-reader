@@ -7,7 +7,6 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"sync"
 
 	dbx "github.com/dropbox/dropbox-sdk-go-unofficial/dropbox"
 	dropbox "github.com/dropbox/dropbox-sdk-go-unofficial/dropbox/files"
@@ -15,16 +14,13 @@ import (
 
 type DropboxRepository struct {
 	client        dropbox.Client
-	cache         map[string]historyItem
 	historyPrefix string
-	mux           sync.Mutex
 }
 
 func NewDropboxRepository(
 	token string, historyPrefix string,
 ) (repo *DropboxRepository) {
 	repo = new(DropboxRepository)
-	repo.cache = make(map[string]historyItem)
 	repo.client = dropbox.New(dbx.Config{
 		Token: token,
 	})
@@ -53,9 +49,9 @@ func (repo *DropboxRepository) List(path string) (books []Book, err error) {
 			}
 
 			if strings.Contains(meta.Name, ".pdf") {
-				books = append(books, DropboxBook{
-					id:   meta.Id,
-					name: meta.Name,
+				books = append(books, Book{
+					ID:   meta.Id,
+					Name: meta.Name,
 				})
 			}
 		}
@@ -85,59 +81,50 @@ func (repo *DropboxRepository) Download(path string) (
 		return
 	}
 
-	book = DropboxBook{
-		id:   meta.Id,
-		name: meta.Name,
+	book = Book{
+		ID:   meta.Id,
+		Name: meta.Name,
 	}
 
 	return
 }
 
-func (repo *DropboxRepository) GetHistory(ID string) (page int, err error) {
-	repo.mux.Lock()
-	defer repo.mux.Unlock()
-	item, ok := repo.cache[ID]
-	if !ok {
-		func() {
-			var data io.ReadCloser
-			if item.meta, data, err = repo.client.Download(&dropbox.DownloadArg{
-				Path: fmt.Sprintf("%s/%s", repo.historyPrefix, ID),
-			}); err != nil {
-				return
-			}
-
-			defer data.Close()
-
-			var pageStr string
-			if pageStr, err = bufio.NewReader(data).ReadString('\n'); err != nil {
-				return
-			}
-
-			if item.page, err = strconv.Atoi(strings.Trim(pageStr, "\n")); err != nil {
-				return
-			}
-
-			repo.cache[ID] = item
-		}()
-
-		if err != nil {
-			log.Printf("could not load old data for %s, err: %v", ID, err)
-			item.page = 1
-			err = nil
+func (repo *DropboxRepository) GetHistory(ID string) (history History, err error) {
+	if err = func() (err error) {
+		var (
+			data io.ReadCloser
+			meta *dropbox.FileMetadata
+		)
+		if meta, data, err = repo.client.Download(&dropbox.DownloadArg{
+			Path: fmt.Sprintf("%s/%s", repo.historyPrefix, ID),
+		}); err != nil {
+			return
 		}
+
+		defer data.Close()
+
+		var pageStr string
+		if pageStr, err = bufio.NewReader(data).ReadString('\n'); err != nil {
+			return
+		}
+
+		history.Page, err = strconv.Atoi(strings.Trim(pageStr, "\n"))
+		history.Version = meta.Rev
+		return
+	}(); err != nil {
+		log.Printf("could not load old data for %s, err: %v", ID, err)
+		history.Page = 1
+		err = nil
 	}
 
-	page = item.page
 	return
 }
 
-func (repo *DropboxRepository) UpdateHistory(ID string, page int) (err error) {
-	repo.mux.Lock()
-	defer repo.mux.Unlock()
-	item, ok := repo.cache[ID]
-
+func (repo *DropboxRepository) WriteHistory(
+	ID string, history History,
+) (updated History, err error) {
 	var mode *dropbox.WriteMode
-	if !ok {
+	if history.Version == "" {
 		mode = &dropbox.WriteMode{
 			Tagged: dbx.Tagged{
 				Tag: dropbox.WriteModeAdd,
@@ -148,20 +135,21 @@ func (repo *DropboxRepository) UpdateHistory(ID string, page int) (err error) {
 			Tagged: dbx.Tagged{
 				Tag: dropbox.WriteModeUpdate,
 			},
-			Update: item.meta.Rev,
+			Update: history.Version,
 		}
 	}
 
-	if item.meta, err = repo.upload(
+	var meta *dropbox.FileMetadata
+	if meta, err = repo.upload(
 		ID,
-		strings.NewReader(fmt.Sprintf("%d\n", page)),
+		strings.NewReader(fmt.Sprintf("%d\n", history.Page)),
 		mode,
 	); err != nil {
 		return
 	}
 
-	item.page = page
-	repo.cache[ID] = item
+	updated.Page = history.Page
+	updated.Version = meta.Rev
 	return
 }
 

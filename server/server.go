@@ -1,13 +1,13 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
 	"log"
 	"net/http"
 	"regexp"
-	"strconv"
 
 	"github.com/geek1011/BookBrowser/book"
 	"github.com/geek1011/BookBrowser/public"
@@ -17,24 +17,28 @@ import (
 
 // Server is a BookBrowser server.
 type Server struct {
-	Addr    string
-	Verbose bool
-	router  *httprouter.Router
-	render  *render.Render
-	repo    book.Repository
+	Addr     string
+	Verbose  bool
+	router   *httprouter.Router
+	render   *render.Render
+	repo     book.Repository
+	bookPath string
 }
 
-// NewServer creates a new BookBrowser server. It will not index the books automatically.
-func NewServer(addr string, verbose bool, token string) *Server {
+// NewServer creates a new BookBrowser server.
+func NewServer(
+	addr string, verbose bool, token string, historyPrefix string, bookPath string,
+) *Server {
 	if verbose {
 		log.Printf("Supported formats: %s", ".pdf")
 	}
 
 	s := &Server{
-		Addr:    addr,
-		Verbose: verbose,
-		router:  httprouter.New(),
-		repo:    book.NewDropboxRepository(token, "/history"),
+		Addr:     addr,
+		Verbose:  verbose,
+		router:   httprouter.New(),
+		repo:     book.NewDropboxRepository(token, historyPrefix),
+		bookPath: bookPath,
 	}
 
 	s.initRender()
@@ -88,81 +92,108 @@ func (s *Server) initRouter() {
 
 	s.router.GET("/books", s.handleBooks)
 	s.router.GET("/download/:id", s.handleDownload)
+	s.router.GET("/history/get/:id", s.handleHistoryGet)
+	s.router.POST("/history/set/:id", s.handleHistoryUpdate)
 
 	s.router.GET("/static/*filepath", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		http.FileServer(public.Box).ServeHTTP(w, req)
 	})
 
-	s.router.POST("/history/set/:id/:page", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		id := ps.ByName("id")
-		page, err := strconv.Atoi(ps.ByName("page"))
-		if err != nil || id == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			io.WriteString(w, "Invalid request")
-			log.Printf("Error handling request for %s: %v\n", req.URL.Path, err)
-			return
-		}
+}
 
-		if err = s.repo.UpdateHistory(id, page); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			io.WriteString(w, "Request failed")
-			log.Printf("Error handling request for %s: %v\n", req.URL.Path, err)
-			return
-		}
+func (s *Server) handleHistoryUpdate(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	var (
+		id      string
+		history book.History
+		err     error
+	)
 
-		w.WriteHeader(http.StatusCreated)
-	})
-
-	s.router.GET("/history/get/:id", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		id := ps.ByName("id")
-		if id == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			io.WriteString(w, "Invalid request")
-			log.Printf("Error handling request for %s\n", req.URL.Path)
-			return
-		}
-
-		page, err := s.repo.GetHistory(id)
+	defer func() {
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			io.WriteString(w, "Request failed")
-			log.Printf("Error handling request for %s: %v\n", req.URL.Path, err)
+			handleError(w, req, err)
 			return
 		}
+	}()
 
-		io.WriteString(w, fmt.Sprintf("%d", page))
-	})
+	decoder := json.NewDecoder(req.Body)
+	if err = decoder.Decode(&history); err != nil {
+		return
+	}
+
+	if id = ps.ByName("id"); id == "" || history.Page <= 0 {
+		err = fmt.Errorf("invalid request")
+		return
+	}
+
+	var updated book.History
+	if updated, err = s.repo.WriteHistory(id, history); err != nil {
+		return
+	}
+
+	var jsonBytes []byte
+	if jsonBytes, err = json.Marshal(updated); err != nil {
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	io.WriteString(w, string(jsonBytes))
+}
+
+func (s *Server) handleHistoryGet(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+	var err error
+
+	defer func() {
+		if err != nil {
+			handleError(w, req, err)
+			return
+		}
+	}()
+
+	id := ps.ByName("id")
+	if id == "" {
+		err = fmt.Errorf("invalid request")
+		return
+	}
+
+	var history book.History
+	if history, err = s.repo.GetHistory(id); err != nil {
+		return
+	}
+
+	var jsonBytes []byte
+	if jsonBytes, err = json.Marshal(history); err != nil {
+		return
+	}
+
+	io.WriteString(w, string(jsonBytes))
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	book, data, err := s.repo.Download(p.ByName("id"))
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		io.WriteString(w, "Error handling request")
-		log.Printf("Error handling request for %s: %v\n", r.URL.Path, err)
+		handleError(w, r, err)
 		return
 	}
 	defer data.Close()
 
 	w.Header().Set("Cache-Control", "max-age=2592000")
 	w.Header().Set(
-		"Content-Disposition", `attachment; filename="`+regexp.MustCompile("[[:^ascii:]]").ReplaceAllString(book.Name(), "_")+`"`)
+		"Content-Disposition", `attachment; filename="`+regexp.MustCompile("[[:^ascii:]]").ReplaceAllString(book.Name, "_")+`"`)
 	w.Header().Set("Content-Type", "application/pdf")
 
 	_, err = io.Copy(w, data)
 	if err != nil {
-		log.Printf("Error handling request for %s: %v\n", r.URL.Path, err)
+		handleError(w, r, err)
+		return
 	}
 
 	return
 }
 
 func (s *Server) handleBooks(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	bl, err := s.repo.List("/books")
+	bl, err := s.repo.List(s.bookPath)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		io.WriteString(w, "Error handling request")
-		log.Printf("Error handling request for %s: %s\n", r.URL.Path, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -172,4 +203,10 @@ func (s *Server) handleBooks(w http.ResponseWriter, r *http.Request, _ httproute
 		"Title":            "",
 		"Books":            bl,
 	})
+}
+
+func handleError(w http.ResponseWriter, r *http.Request, err error) {
+	w.WriteHeader(http.StatusInternalServerError)
+	io.WriteString(w, "Error handling request")
+	log.Printf("Error handling request for %s: %v\n", r.URL.Path, err)
 }
