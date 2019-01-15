@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/geek1011/BookBrowser/book"
 	"github.com/geek1011/BookBrowser/public"
@@ -120,7 +121,7 @@ func (s *Server) handleHistoryUpdate(w http.ResponseWriter, req *http.Request, p
 		return
 	}
 
-	if id = ps.ByName("id"); id == "" || history.Page <= 0 {
+	if id = ps.ByName("id"); id == "" || history.Data == "" {
 		err = fmt.Errorf("invalid request")
 		return
 	}
@@ -169,7 +170,9 @@ func (s *Server) handleHistoryGet(w http.ResponseWriter, req *http.Request, ps h
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	book, data, err := s.repo.Download(p.ByName("id"))
+	id := p.ByName("id")
+	id = strings.TrimRight(id, ".epub")
+	book, data, err := s.repo.Download(id)
 	if err != nil {
 		handleError(w, r, err)
 		return
@@ -178,8 +181,14 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, p httpro
 
 	w.Header().Set("Cache-Control", "max-age=2592000")
 	w.Header().Set(
-		"Content-Disposition", `attachment; filename="`+regexp.MustCompile("[[:^ascii:]]").ReplaceAllString(book.Name, "_")+`"`)
-	w.Header().Set("Content-Type", "application/pdf")
+		"Content-Disposition", `attachment; filename="`+regexp.MustCompile("[[:^ascii:]]").ReplaceAllString(book.Name, "_")+`"`,
+	)
+
+	if book.IsPDF {
+		w.Header().Set("Content-Type", "application/pdf")
+	} else {
+		w.Header().Set("Content-Type", "application/epub")
+	}
 
 	_, err = io.Copy(w, data)
 	if err != nil {

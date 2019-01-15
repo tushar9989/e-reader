@@ -1,11 +1,12 @@
 package book
 
 type Book struct {
-	ID   string
-	Name string
+	ID    string
+	Name  string
+	IsPDF bool
 }
 
 type History struct {
-	Page    int    `json:"page"`
+	Data    string `json:"data"`
 	Version string `json:"version"`
 }

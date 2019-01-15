@@ -2,7 +2,11 @@
     {{range .Books}}
     <div class="book">
         <div class="meta">
+            {{if .IsPDF}}
             <a href="/static/reader/viewer.html?id={{.ID}}">{{.Name}}</a>
+            {{else}}
+            <a href="/static/reader/epub/spreads.html?id={{.ID}}">{{.Name}}</a>
+            {{end}}
         </div>
     </div>
     {{end}}

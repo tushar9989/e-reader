@@ -1,11 +1,10 @@
 package book
 
 import (
-	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"log"
-	"strconv"
 	"strings"
 
 	dbx "github.com/dropbox/dropbox-sdk-go-unofficial/dropbox"
@@ -48,10 +47,11 @@ func (repo *DropboxRepository) List(path string) (books []Book, err error) {
 				continue
 			}
 
-			if strings.Contains(meta.Name, ".pdf") {
+			if strings.Contains(meta.Name, ".pdf") || strings.Contains(meta.Name, ".epub") {
 				books = append(books, Book{
-					ID:   meta.Id,
-					Name: meta.Name,
+					ID:    meta.Id,
+					Name:  meta.Name,
+					IsPDF: strings.Contains(meta.Name, ".pdf"),
 				})
 			}
 		}
@@ -103,17 +103,13 @@ func (repo *DropboxRepository) GetHistory(ID string) (history History, err error
 
 		defer data.Close()
 
-		var pageStr string
-		if pageStr, err = bufio.NewReader(data).ReadString('\n'); err != nil {
-			return
-		}
-
-		history.Page, err = strconv.Atoi(strings.Trim(pageStr, "\n"))
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(data)
+		history.Data = buf.String()
 		history.Version = meta.Rev
 		return
 	}(); err != nil {
 		log.Printf("could not load old data for %s, err: %v", ID, err)
-		history.Page = 1
 		err = nil
 	}
 
@@ -142,13 +138,13 @@ func (repo *DropboxRepository) WriteHistory(
 	var meta *dropbox.FileMetadata
 	if meta, err = repo.upload(
 		ID,
-		strings.NewReader(fmt.Sprintf("%d\n", history.Page)),
+		strings.NewReader(history.Data),
 		mode,
 	); err != nil {
 		return
 	}
 
-	updated.Page = history.Page
+	updated.Data = history.Data
 	updated.Version = meta.Rev
 	return
 }

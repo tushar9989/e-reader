@@ -379,7 +379,7 @@ var PDFViewerApplication = {
           }
 
           var res = JSON.parse(xhr.response);
-          var PAGE = res.page;
+          var PAGE = +res.data;
           HISTORY_VERSION = res.version;
           if (PAGE != NaN && PAGE > 1) {
             PDFViewerApplication.page = PAGE;
@@ -454,7 +454,7 @@ var saveHistory = function() {
         HISTORY_VERSION = res.version;
       },
       {
-        "page": CURRENT_PAGE,
+        "data": "" + CURRENT_PAGE + "",
         "version": HISTORY_VERSION
       }
     )
