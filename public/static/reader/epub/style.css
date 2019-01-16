@@ -1,5 +1,9 @@
-body {
+* {
+  padding: 0;
   margin: 0;
+}
+
+body {
   background: #fafafa;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   color: #333;
@@ -7,7 +11,15 @@ body {
   position: absolute;
   height: 100%;
   width: 100%;
-  min-height: 800px;
+}
+
+header.full-screen {
+  display: none;
+}
+
+header {
+  display: block;
+  margin: 10px auto;
 }
 
 #title {
@@ -26,13 +38,12 @@ body {
 
 #viewer.spreads {
   width: 100%;
-  height: 80%;
+  height: 100%;
   box-shadow: 0 0 4px #ccc;
   border-radius: 5px;
   padding: 0;
   position: relative;
   background: white url('ajax-loader.gif') center center no-repeat;
-  top: 50px;
 }
 
 #viewer.spreads .epub-view > iframe {
@@ -54,48 +65,12 @@ body {
     background: white;
 }
 
-#prev {
-  left: 0;
-}
-
-#next {
-  right: 0;
-}
-
-#toc {
-  display: block;
-  margin: 10px auto;
-}
-
-.arrow {
-  position: fixed;
-  top: 50%;
-  margin-top: -32px;
-  font-size: 64px;
-  color: #E2E2E2;
-  font-family: arial, sans-serif;
-  font-weight: bold;
-  cursor: pointer;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  user-select: none;
-  text-decoration: none;
-}
-
 .navlink {
   margin: 14px;
   display: block;
   text-align: center;
   text-decoration: none;
   color: #ccc;
-}
-
-.arrow:hover, .navlink:hover {
-  color: #777;
-}
-
-.arrow:active, .navlink:hover {
-  color: #000;
 }
 
 #book-wrapper {
@@ -148,7 +123,6 @@ body {
   -moz-transition: -moz-transform .25s ease-out;
   -ms-transition: -moz-transform .25s ease-out;
   transition: transform .25s ease-out;
-
 }
 
 #navigation.fixed {
