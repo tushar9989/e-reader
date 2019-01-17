@@ -216,6 +216,6 @@ func (s *Server) handleBooks(w http.ResponseWriter, r *http.Request, _ httproute
 
 func handleError(w http.ResponseWriter, r *http.Request, err error) {
 	w.WriteHeader(http.StatusInternalServerError)
-	io.WriteString(w, "Error handling request")
-	log.Printf("Error handling request for %s: %v\n", r.URL.Path, err)
+	io.WriteString(w, fmt.Sprintf("error handling request. reason: %v", err))
+	log.Printf("error handling request for %s: %v\n", r.URL.Path, err)
 }

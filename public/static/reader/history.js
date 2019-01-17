@@ -26,6 +26,14 @@ function History(BOOK_ID) {
                     function(xhr) {
                         if (xhr.status !== 200) {
                             reject("get history failed. reason: " + xhr.statusText);
+
+                            var snackbar = document.getElementById("snackbar");
+                            snackbar.classList.toggle('show');
+                            snackbar.innerHTML = "get history failed. message: " + xhr.response;
+                            setTimeout(function(){ 
+                                snackbar.classList.toggle('show');
+                            }, 5000);
+                            return;
                         }
         
                         var res = JSON.parse(xhr.response);
@@ -52,7 +60,10 @@ function History(BOOK_ID) {
             "POST",
             function(xhr) {
                 if (xhr.status !== 201) {
-                    // TODO: Prompt user to reload the page.
+                    var snackbar = document.getElementById("snackbar");
+                    snackbar.classList.toggle('show');
+                    snackbar.innerHTML = "save history failed. message: " + xhr.response;
+
                     console.error("save history failed.", xhr.statusText);
                     return;
                 }
