@@ -29,16 +29,18 @@ var CMAP_PACKED = true;
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.0.943/build/pdf.worker.js';
 
-var HISTORY_VERSION;
 var DEFAULT_SCALE_DELTA = 1.1;
 var MIN_SCALE = 0.25;
 var MAX_SCALE = 10.0;
 var DEFAULT_SCALE_VALUE = 'auto';
-var BOOK_ID = findGetParameter("id");
-var DEFAULT_URL = '../reader/pdf/web/compressed.tracemonkey-pldi-09.pdf';
 
-if (BOOK_ID !== null) {
-  DEFAULT_URL = '/download/' + BOOK_ID;
+var bookHistory;
+var id = findGetParameter("id");
+if (id) {
+  bookHistory = new History(id);
+  id = '/download/' + id;
+} else {
+  id = '../reader/pdf/web/compressed.tracemonkey-pldi-09.pdf';
 }
 
 function toggleFullscreen() {
@@ -57,7 +59,6 @@ var PDFViewerApplication = {
   pdfLoadingTask: null,
   pdfDocument: null,
   pdfViewer: null,
-  pdfHistory: null,
   pdfLinkService: null,
 
   /**
@@ -99,7 +100,6 @@ var PDFViewerApplication = {
       self.pdfDocument = pdfDocument;
       self.pdfViewer.setDocument(pdfDocument);
       self.pdfLinkService.setDocument(pdfDocument);
-      self.pdfHistory.initialize(pdfDocument.fingerprint);
 
       self.loadingBar.hide();
       self.setTitleUsingMetadata(pdfDocument);
@@ -324,11 +324,6 @@ var PDFViewerApplication = {
     this.pdfViewer = pdfViewer;
     linkService.setViewer(pdfViewer);
 
-    this.pdfHistory = new pdfjsViewer.PDFHistory({
-      linkService: linkService,
-    });
-    linkService.setHistory(this.pdfHistory);
-
     document.getElementById('previous').addEventListener('click', function() {
       PDFViewerApplication.page--;
     });
@@ -366,29 +361,19 @@ var PDFViewerApplication = {
       pdfViewer.currentScaleValue = DEFAULT_SCALE_VALUE;
       PDFViewerApplication.page = 1;
 
-      if (BOOK_ID === null) {
-        return
+      if (bookHistory) {
+        bookHistory.get().then(
+          function(page) {
+            page = +page;
+            if (page != NaN && page > 1) {
+              PDFViewerApplication.page = page;
+            }
+          },
+          function(response) {
+            console.error(response);
+          }
+        )
       }
-
-      makeRequest(
-        "/history/get/" + BOOK_ID,
-        "GET",
-        function(xhr) {
-          if (xhr.status !== 200) {
-            console.error("get history failed.", xhr.statusText);
-          }
-
-          var res = JSON.parse(xhr.response);
-          var PAGE = +res.data;
-          HISTORY_VERSION = res.version;
-          if (PAGE != NaN && PAGE > 1) {
-            PDFViewerApplication.page = PAGE;
-            CURRENT_PAGE = PAGE;
-          }
-        }
-      )
-
-      setInterval(saveHistory, 10000);
     });
 
     document.addEventListener('updateviewarea', function (evt) {
@@ -399,7 +384,7 @@ var PDFViewerApplication = {
       document.getElementById('previous').disabled = (page <= 1);
       document.getElementById('next').disabled = (page >= numPages);
 
-      updateCurrentPage(page);
+      bookHistory.update(page);
     }, true);
   },
 };
@@ -420,61 +405,9 @@ document.addEventListener('DOMContentLoaded', function () {
 // We need to delay opening until all HTML is loaded.
 PDFViewerApplication.animationStartedPromise.then(function () {
   PDFViewerApplication.open({
-    url: DEFAULT_URL,
+    url: id,
   });
 });
-
-var CURRENT_PAGE = 1;
-var NEEDS_UPDATE = false;
-
-var updateCurrentPage = debounce(function(page) {
-  if (CURRENT_PAGE !== page) {
-    CURRENT_PAGE = page;
-    NEEDS_UPDATE = true;
-  }
-}, 250);
-
-var saveHistory = function() {
-  if (BOOK_ID === null) {
-    return
-  }
-
-  if (NEEDS_UPDATE) {
-    makeRequest(
-      "/history/set/" + BOOK_ID,
-      "POST",
-      function(xhr) {
-        if (xhr.status !== 201) {
-          console.error("save history failed.", xhr.statusText);
-          return
-        }
-        NEEDS_UPDATE = false;
-
-        var res = JSON.parse(xhr.response);
-        HISTORY_VERSION = res.version;
-      },
-      {
-        "data": "" + CURRENT_PAGE + "",
-        "version": HISTORY_VERSION
-      }
-    )
-  }
-};
-
-function debounce(func, wait, immediate) {
-	var timeout;
-	return function() {
-		var context = this, args = arguments;
-		var later = function() {
-			timeout = null;
-			if (!immediate) func.apply(context, args);
-		};
-		var callNow = immediate && !timeout;
-		clearTimeout(timeout);
-		timeout = setTimeout(later, wait);
-		if (callNow) func.apply(context, args);
-	};
-};
 
 function findGetParameter(parameterName) {
   var result = null,
@@ -487,26 +420,4 @@ function findGetParameter(parameterName) {
         if (tmp[0] === parameterName) result = decodeURIComponent(tmp[1]);
       });
   return result;
-}
-
-function makeRequest(url, method, callback, data) {
-  var xhr = new XMLHttpRequest();
-  xhr.open(method, url, true);
-  xhr.onload = function () {
-    if (xhr.readyState === 4) {
-      callback(xhr);
-    } else {
-      console.error(xhr.statusText);
-    }
-  };
-
-  xhr.onerror = function () {
-    console.error(xhr.statusText);
-  };
-
-  if (data == undefined) {
-    xhr.send(null);
-  } else {
-    xhr.send(JSON.stringify(data))
-  }
 }

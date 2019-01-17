@@ -2,11 +2,11 @@
 
 var params = URLSearchParams && new URLSearchParams(document.location.search.substring(1));
 var id = params && params.get("id") && decodeURIComponent(params.get("id"));
-var BOOK_ID = id;
-var HISTORY_VERSION;
+var bookHistory;
 
 // Load the opf
 if (id) {
+    bookHistory = new History(id);
     id = "/download/" + id + ".epub";
 }
 
@@ -22,24 +22,15 @@ var rendition = book.renderTo("viewer", {
 rendition.display();
 
 book.ready.then(function() {
-    if (BOOK_ID) {
-        makeRequest(
-            "/history/get/" + BOOK_ID,
-            "GET",
-            function(xhr) {
-                if (xhr.status !== 200) {
-                    console.error("get history failed.", xhr.statusText);
-                }
-
-                var res = JSON.parse(xhr.response);
-                HISTORY_VERSION = res.version;
-                if (res.data != "") {
-                    rendition.display(res.data);
-                }
+    if (bookHistory) {
+        bookHistory.get().then(
+            function(page) {
+                rendition.display(page);
+            },
+            function(response) {
+                console.error(response);
             }
-        );
-
-        setInterval(saveHistory, 10000);
+        )
     }
 
     rendition.on("click", function(e) {
@@ -95,7 +86,11 @@ rendition.on("rendered", function(section) {
 });
 
 rendition.on("relocated", function(location) {
-    updateCurrentPage(location.start.cfi);
+    if (!bookHistory) {
+        return;
+    }
+
+    bookHistory.update(location.start.cfi);
 });
 
 rendition.on("layout", function(layout) {
@@ -132,79 +127,4 @@ book.loaded.navigation.then(function(toc) {
         rendition.display(url);
         return false;
     };
-
 });
-
-var CURRENT_PAGE = "";
-var NEEDS_UPDATE = false;
-
-var updateCurrentPage = debounce(function(page) {
-    if (CURRENT_PAGE !== page) {
-        CURRENT_PAGE = page;
-        NEEDS_UPDATE = true;
-    }
-}, 250);
-
-var saveHistory = function() {
-    if (!BOOK_ID) {
-        return;
-    }
-
-    if (NEEDS_UPDATE) {
-        makeRequest(
-            "/history/set/" + BOOK_ID,
-            "POST",
-            function(xhr) {
-                if (xhr.status !== 201) {
-                    console.error("save history failed.", xhr.statusText);
-                    return;
-                }
-                NEEDS_UPDATE = false;
-
-                var res = JSON.parse(xhr.response);
-                HISTORY_VERSION = res.version;
-            }, {
-                "data": "" + CURRENT_PAGE + "",
-                "version": HISTORY_VERSION
-            }
-        )
-    }
-};
-
-function debounce(func, wait, immediate) {
-    var timeout;
-    return function() {
-        var context = this,
-            args = arguments;
-        var later = function() {
-            timeout = null;
-            if (!immediate) func.apply(context, args);
-        };
-        var callNow = immediate && !timeout;
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-        if (callNow) func.apply(context, args);
-    };
-};
-
-function makeRequest(url, method, callback, data) {
-    var xhr = new XMLHttpRequest();
-    xhr.open(method, url, true);
-    xhr.onload = function() {
-        if (xhr.readyState === 4) {
-            callback(xhr);
-        } else {
-            console.error(xhr.statusText);
-        }
-    };
-
-    xhr.onerror = function() {
-        console.error(xhr.statusText);
-    };
-
-    if (data == undefined) {
-        xhr.send(null);
-    } else {
-        xhr.send(JSON.stringify(data))
-    }
-}

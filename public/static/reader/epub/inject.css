@@ -1,13 +1,9 @@
-body.calibre3 {
+body {
     font-size: 1.8em;
 }
 
-body {
-    max-width: 100%;
-}
-
 @media(min-width: 900px) {
-    body.calibre3 {
+    body {
         font-size: 1.3em;
     }
 }
