@@ -17,6 +17,10 @@ function History(BOOK_ID) {
         }
     }, 500);
 
+    this.currentPage = function() {
+        return CURRENT_PAGE;
+    }
+
     this.get = function() {
         return new Promise(
             (resolve, reject) => {
@@ -39,6 +43,7 @@ function History(BOOK_ID) {
                         var res = JSON.parse(xhr.response);
                         HISTORY_VERSION = res.version;
                         if (res.data) {
+                            CURRENT_PAGE = res.data;
                             resolve(res.data);
                         }
                         

@@ -18,8 +18,9 @@ header.full-screen {
 }
 
 header {
-  display: block;
+  display: flex;
   margin: 10px auto;
+  justify-content: space-between;
 }
 
 #title {
@@ -190,6 +191,7 @@ header {
 }
 
 #navigation.closed {
+  transform: translate(-400px, 0);
   -webkit-transform: translate(-400px, 0);
   -moz-transform: translate(-400px, 0);
   -ms-transform: translate(-400px, 0);
@@ -217,10 +219,31 @@ svg {
   padding: 10px;
   stroke: #E2E2E2;
   fill: #E2E2E2;
-
 }
 
 #opener:hover {
   stroke: #777;
   fill: #777;
+}
+
+#toc {
+  margin-left: 10px;
+  max-width: 200px;
+}
+
+.font-size-selector {
+  position: relative;
+  padding-left: 2.5rem;
+  display: inline-block;
+  margin-right: 10px;
+  font-size: 0.8rem;
+}
+
+.font-size-selector label {
+  font-weight: bold;
+  text-transform: uppercase;
+  top: 50%;
+  position: absolute;
+  transform: translateY(-50%);
+  left: 0px;
 }

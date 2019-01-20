@@ -8655,7 +8655,7 @@ var Rendition = function () {
 			if (!location.length) {
 				return {};
 			}
-			var start = location[0];
+			var start = location[1] || location[0];
 			var end = location[location.length - 1];
 
 			var located = {

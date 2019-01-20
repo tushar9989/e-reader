@@ -1,9 +1,7 @@
-body {
-    font-size: 1.8em;
+.inject {
+    font-size: 100%;
 }
 
-@media(min-width: 900px) {
-    body {
-        font-size: 1.3em;
-    }
+*:hover {
+    color: black !important;
 }

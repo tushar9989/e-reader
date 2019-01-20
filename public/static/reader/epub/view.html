@@ -3,23 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>EPUB.js Spreads Example</title>
+  <title>EPUB Viewer</title>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
   <script src="epub.js"></script>
 
   <link rel="stylesheet" type="text/css" href="style.css">
   <link rel="stylesheet" type="text/css" href="../snackbar.css">
+  <link rel="stylesheet" type="text/css" href="number/number.css">
 
 </head>
 <body>
   <header class="full-screen">
     <select id="toc"></select>
+    <div class="font-size-selector">
+      <label for="font">Font</label>
+      <div class="number-input">
+        <button onclick="step.apply(this, [false])" ></button>
+        <input id="font-size" class="quantity" min="50" max="300" step="10" value="100" type="number">
+        <button onclick="step.apply(this, [true])" class="plus"></button>
+      </div>
+    </div>
   </header>
   <div id="viewer" class="spreads"></div>
   <div id="snackbar"></div>
 
   <script src="../history.js"></script>
+  <script src="number/number.js"></script>
   <script src="view.js"></script>
 </body>
 </html>

@@ -10,14 +10,39 @@ if (id) {
     id = "/download/" + id + ".epub";
 }
 
-var prefix = (window.location.href).substring(0, window.location.href.lastIndexOf('/'));
-
 var book = ePub(id || "https://s3.amazonaws.com/moby-dick/moby-dick.epub");
 var rendition = book.renderTo("viewer", {
     width: "100%",
-    height: "100%",
-    stylesheet: prefix + "/inject.css"
+    height: "100%"
 });
+
+var prefix = (window.location.href).substring(0, window.location.href.lastIndexOf('/'));
+rendition.themes.register("inject", prefix + "/inject.css");
+rendition.themes.select("inject");
+
+function updateFontSize(value) {
+    var percentage = +value;
+    if (percentage == NaN || percentage < 50 || percentage > 200) {
+        return;
+    }
+
+    if (rendition) {
+        rendition.themes.fontSize(percentage + "%");
+        if (bookHistory) {
+            rendition.display(bookHistory.currentPage());
+        }
+    }
+}
+
+document.getElementById("font-size").addEventListener("input", function(input) {
+    updateFontSize(input.target.value);
+    localStorage.setItem('font-size', input.target.value);
+});
+
+if (localStorage.getItem('font-size')) {
+    updateFontSize(localStorage.getItem('font-size'));
+    document.getElementById("font-size").value = +localStorage.getItem('font-size');
+}
 
 rendition.display();
 
@@ -34,32 +59,48 @@ book.ready.then(function() {
     }
 
     rendition.on("click", function(e) {
-        var windowHeight = window.innerHeight;
-        var clickY = e.screenY;
-        if (clickY <= 0.2 * windowHeight) {
+        var container = rendition.manager.container;
+        var clickX = e.clientX - container.scrollLeft;
+        var clickY = e.clientY - container.scrollTop;
+        if (clickY <= 0.2 * window.innerHeight) {
             document.getElementsByTagName("header")[0].classList.toggle('full-screen');
-        } else if (clickY <= 0.8 * windowHeight) {
+        } else if (clickX > 0.15 * window.innerWidth) {
             rendition.next();
+            PAGE_CHANGED = true;
         } else {
             rendition.prev();
+            PAGE_CHANGED = true;
         }
     });
 
     var keyListener = function(e) {
         // Left Key
         if ((e.keyCode || e.which) == 37) {
-            book.package.metadata.direction === "rtl" ? rendition.next() : rendition.prev();
+            rendition.prev();
+            PAGE_CHANGED = true;
         }
 
         // Right Key
         if ((e.keyCode || e.which) == 39) {
-            book.package.metadata.direction === "rtl" ? rendition.prev() : rendition.next();
+            rendition.next();
+            PAGE_CHANGED = true;
         }
 
     };
 
     rendition.on("keyup", keyListener);
-    document.addEventListener("keyup", keyListener, false);
+});
+
+var PAGE_CHANGED = false;
+rendition.on("relocated", function(location) {
+    if (PAGE_CHANGED) {
+        if (!resizeTimeout) {
+            if (rendition && bookHistory) {
+                bookHistory.update(location.start.cfi);
+            }
+        }
+        PAGE_CHANGED = false;
+    }
 });
 
 rendition.on("rendered", function(section) {
@@ -85,12 +126,18 @@ rendition.on("rendered", function(section) {
     }
 });
 
-rendition.on("relocated", function(location) {
-    if (!bookHistory) {
-        return;
-    }
+var resizeTimeout;
+rendition.on("resized", function() {
+    if (rendition && bookHistory) {
+        if (resizeTimeout) {
+            clearTimeout(resizeTimeout);
+        }
 
-    bookHistory.update(location.start.cfi);
+        resizeTimeout = setTimeout(function() {
+            rendition.display(bookHistory.currentPage());
+            resizeTimeout = undefined;
+        }, 500);
+    }
 });
 
 rendition.on("layout", function(layout) {
