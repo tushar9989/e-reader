@@ -3,6 +3,7 @@
 var params = URLSearchParams && new URLSearchParams(document.location.search.substring(1));
 var id = params && params.get("id") && decodeURIComponent(params.get("id"));
 var bookHistory;
+var FIRST_LOAD_DONE = false;
 
 // Load the opf
 if (id) {
@@ -28,7 +29,7 @@ function updateFontSize(value) {
 
     if (rendition) {
         rendition.themes.fontSize(percentage + "%");
-        if (bookHistory) {
+        if (FIRST_LOAD_DONE && bookHistory) {
             rendition.display(bookHistory.currentPage());
         }
     }
@@ -44,18 +45,26 @@ if (localStorage.getItem('font-size')) {
     document.getElementById("font-size").value = +localStorage.getItem('font-size');
 }
 
-rendition.display();
-
 book.ready.then(function() {
     if (bookHistory) {
         bookHistory.get().then(
             function(page) {
-                rendition.display(page);
+                // Does not work correctly after changing the font size for some books.
+                // Doing it twice to make sure that the desired page is displayed. 
+                rendition.display(page).then(function() {
+                    rendition.display(page);
+                });
+                FIRST_LOAD_DONE = true;
             },
             function(response) {
                 console.error(response);
+                rendition.display();
+                FIRST_LOAD_DONE = true;
             }
         )
+    } else {
+        rendition.display();
+        FIRST_LOAD_DONE = true;
     }
 
     rendition.on("click", function(e) {
@@ -85,7 +94,6 @@ book.ready.then(function() {
             rendition.next();
             PAGE_CHANGED = true;
         }
-
     };
 
     rendition.on("keyup", keyListener);
