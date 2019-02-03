@@ -4,7 +4,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/geek1011/BookBrowser/server"
+	"github.com/tushar9989/e-reader/server"
 	"github.com/spf13/pflag"
 )
 

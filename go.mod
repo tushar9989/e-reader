@@ -1,4 +1,4 @@
-module github.com/geek1011/BookBrowser
+module github.com/tushar9989/e-reader
 
 require (
 	github.com/dropbox/dropbox-sdk-go-unofficial v5.4.0+incompatible

@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/geek1011/BookBrowser/book"
-	"github.com/geek1011/BookBrowser/public"
+	"github.com/tushar9989/e-reader/book"
+	"github.com/tushar9989/e-reader/public"
 	"github.com/julienschmidt/httprouter"
 	"github.com/unrolled/render"
 )
