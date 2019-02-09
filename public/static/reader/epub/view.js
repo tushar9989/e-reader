@@ -4,6 +4,8 @@ var params = URLSearchParams && new URLSearchParams(document.location.search.sub
 var id = params && params.get("id") && decodeURIComponent(params.get("id"));
 var bookHistory;
 var FIRST_LOAD_DONE = false;
+var FONT_SIZE = "100%";
+var DICTIONARY_VISIBLE = false;
 
 // Load the opf
 if (id) {
@@ -27,8 +29,9 @@ function updateFontSize(value) {
         return;
     }
 
+    FONT_SIZE = percentage + "%";
     if (rendition) {
-        rendition.themes.fontSize(percentage + "%");
+        rendition.themes.fontSize(FONT_SIZE);
         if (FIRST_LOAD_DONE && bookHistory) {
             rendition.display(bookHistory.currentPage());
         }
@@ -44,6 +47,90 @@ if (localStorage.getItem('font-size')) {
     updateFontSize(localStorage.getItem('font-size'));
     document.getElementById("font-size").value = +localStorage.getItem('font-size');
 }
+
+function dictionaryCallback(response) {
+    try {
+        var meanings = [];
+        if (response.tuc && 
+            response.tuc.length > 0) {
+            for (let i = 0; i < response.tuc.length; i++) {
+                if (response.tuc[i].meanings && 
+                    response.tuc[i].meanings.length > 0) {
+                    for (let j = 0; j < response.tuc[i].meanings.length; j++) {
+                        meanings.push(response.tuc[i].meanings[j].text);
+                    }
+                }
+            }
+        }
+
+        if (meanings.length == 0) {
+            meanings.push("Word not found in dictionary");
+        }
+
+        let meaning = document.getElementById("meaning");
+        meaning.style.fontSize = FONT_SIZE;
+        let current = 0;
+        meaning.innerHTML = meanings[current];
+        meaning.onclick = function(e) {
+            let x = 0.5;
+            try {
+                x = (e.x - e.target.parentNode.offsetTop) / e.target.clientWidth;
+            } catch(e) {}
+
+            if (x <= 0.4) {
+                current--;
+                if (current < 0) {
+                    current = 0;
+                }
+            } else if (x >= 0.6) {
+                current++;
+                if (current >= meanings.length) {
+                    current = meanings.length - 1;
+                }
+            }
+            
+            meaning.innerHTML = "<b>" + (current + 1) + " of  " + (meanings.length) + "</b> " + meanings[current];
+        }
+
+        meaning.onclick();
+        document.getElementById("dict").classList.add("visible");
+        DICTIONARY_VISIBLE = true;
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+let SELECTION_CALLED = false;
+let dictionaryHandler = debounce(function(range, contents) {
+    SELECTION_CALLED = false;
+    try {
+        let bounds = contents.window.getSelection().getRangeAt(0).getBoundingClientRect();
+        let top = bounds.top + bounds.height
+        if (top + 110 >= window.innerHeight) {
+            top = bounds.top - 100;
+        }
+
+        top = Math.ceil(top + 0.3);
+        document.getElementById("dict").style.top = top + "px";
+        let text = contents.window.getSelection().getRangeAt(0).cloneContents().textContent;
+        
+        // Remove punctuations.
+        text = text.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()“”]/g,"");
+        
+        // Remove extra spaces.
+        text = text.replace(/\s{2,}/g," ");
+        
+        // Convert to lower case.
+        text = text.toLowerCase();
+
+        var script = document.createElement("script");
+        script.type = "text/javascript";
+        script.src = "https://glosbe.com/gapi/translate?from=eng&dest=eng&format=json&phrase=" + encodeURIComponent(text) + "&callback=dictionaryCallback";
+        document.head.appendChild(script);
+    } catch (error) {
+        console.error(error);
+    } 
+}, 1000);
 
 book.ready.then(function() {
     if (bookHistory) {
@@ -68,18 +155,36 @@ book.ready.then(function() {
     }
 
     rendition.on("click", function(e) {
+        if (DICTIONARY_VISIBLE) {
+            document.getElementById("dict").classList.remove("visible");
+            DICTIONARY_VISIBLE = false;
+            return;
+        }
+
         var container = rendition.manager.container;
         var clickX = e.clientX - container.scrollLeft;
         var clickY = e.clientY - container.scrollTop;
-        if (clickY <= 0.2 * window.innerHeight) {
-            document.getElementsByTagName("header")[0].classList.toggle('full-screen');
-        } else if (clickX > 0.15 * window.innerWidth) {
-            rendition.next();
-            PAGE_CHANGED = true;
-        } else {
-            rendition.prev();
-            PAGE_CHANGED = true;
-        }
+
+        setTimeout(function() {
+            if (SELECTION_CALLED) {
+                return;
+            }
+
+            if (clickY <= 0.3 * window.innerHeight) {
+                document.getElementsByTagName("header")[0].classList.toggle('full-screen');
+            } else if (clickX > 0.20 * window.innerWidth) {
+                rendition.next();
+                PAGE_CHANGED = true;
+            } else {
+                rendition.prev();
+                PAGE_CHANGED = true;
+            }
+        }, 500);
+    });
+
+    rendition.on("selected", function(range, contents) {
+        SELECTION_CALLED = true;
+        dictionaryHandler(range, contents);
     });
 
     var keyListener = function(e) {
@@ -133,6 +238,22 @@ rendition.on("rendered", function(section) {
         });
     }
 });
+
+function debounce(func, wait, immediate) {
+    var timeout;
+    return function() {
+        var context = this,
+            args = arguments;
+        var later = function() {
+            timeout = null;
+            if (!immediate) func.apply(context, args);
+        };
+        var callNow = immediate && !timeout;
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+        if (callNow) func.apply(context, args);
+    };
+}
 
 var resizeTimeout;
 rendition.on("resized", function() {

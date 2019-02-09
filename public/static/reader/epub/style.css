@@ -247,3 +247,28 @@ svg {
   transform: translateY(-50%);
   left: 0px;
 }
+
+.dictionary {
+  position: absolute;
+  top: 0px;
+  background: white;
+  border: 1px solid black;
+  width: 95%;
+  left: 2.5%;
+  height: 100px;
+  overflow: scroll;
+  border-radius: 5px;
+  display: none;
+}
+
+.dictionary.visible {
+  display: block;
+}
+
+.dictionary .meaning {
+  height: 100%;
+  min-height: 100%;
+  text-align: center;
+  padding: 10px;
+  font-size: 100%;
+}
