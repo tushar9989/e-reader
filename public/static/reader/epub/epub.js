@@ -2006,6 +2006,7 @@ var EpubCFI = function () {
 				try {
 
 					if (start.terminal.offset != null) {
+						start.terminal.offset++;
 						range.setStart(startContainer, start.terminal.offset);
 					} else {
 						range.setStart(startContainer, 0);
@@ -2013,13 +2014,6 @@ var EpubCFI = function () {
 				} catch (e) {
 					missed = this.fixMiss(startSteps, start.terminal.offset, doc, needsIgnoring ? ignoreClass : null);
 					range.setStart(missed.container, missed.offset);
-				}
-				if (!endContainer) {
-					// If the end for the range is not set, it results in collapsed becoming
-					// true. This in turn leads to inconsistent behaviour when calling 
-					// getBoundingRect. Wrong bounds lead to the wrong page being displayed.
-					// https://developer.microsoft.com/en-us/microsoft-edge/platform/issues/15684911/
-					range.setEnd(startContainer, range.startContainer.textContent.length);
 				}
 			} else {
 				console.log("No startContainer found for", this.toString());
