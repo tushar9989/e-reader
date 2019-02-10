@@ -63,19 +63,20 @@ function dictionaryCallback(response) {
             }
         }
 
+        let hasResults = true;
         if (meanings.length == 0) {
-            meanings.push("Word not found in dictionary");
+            meanings.push("Not found");
+            hasResults = false;
         }
 
         let meaning = document.getElementById("meaning");
         meaning.style.fontSize = FONT_SIZE;
         let current = 0;
-        meaning.innerHTML = meanings[current];
         meaning.onclick = function(e) {
             let x = 0.5;
             try {
-                x = (e.x - e.target.parentNode.offsetTop) / e.target.clientWidth;
-            } catch(e) {}
+                x = (e.x - e.target.parentNode.offsetLeft) / e.target.clientWidth;
+            } catch(err) { }
 
             if (x <= 0.4) {
                 current--;
@@ -89,7 +90,12 @@ function dictionaryCallback(response) {
                 }
             }
             
-            meaning.innerHTML = "<b>" + (current + 1) + " of  " + (meanings.length) + "</b> " + meanings[current];
+            let prefix = "";
+            if (hasResults) {
+                prefix = "<b>" + (current + 1) + " of  " + (meanings.length) + "</b> ";
+            }
+
+            meaning.innerHTML = prefix + meanings[current];
         }
 
         meaning.onclick();
@@ -123,6 +129,9 @@ let dictionaryHandler = debounce(function(range, contents) {
         // Convert to lower case.
         text = text.toLowerCase();
 
+        // Trim spaces
+        text = text.trim();
+
         var script = document.createElement("script");
         script.type = "text/javascript";
         script.src = "https://glosbe.com/gapi/translate?from=eng&dest=eng&format=json&phrase=" + encodeURIComponent(text) + "&callback=dictionaryCallback";
@@ -136,22 +145,15 @@ book.ready.then(function() {
     if (bookHistory) {
         bookHistory.get().then(
             function(page) {
-                // Does not work correctly after changing the font size for some books.
-                // Doing it twice to make sure that the desired page is displayed. 
-                rendition.display(page).then(function() {
-                    rendition.display(page);
-                });
-                FIRST_LOAD_DONE = true;
+                rendition.display(page);
             },
             function(response) {
                 console.error(response);
                 rendition.display();
-                FIRST_LOAD_DONE = true;
             }
         )
     } else {
         rendition.display();
-        FIRST_LOAD_DONE = true;
     }
 
     rendition.on("click", function(e) {
@@ -179,7 +181,7 @@ book.ready.then(function() {
                 rendition.prev();
                 PAGE_CHANGED = true;
             }
-        }, 500);
+        }, 250);
     });
 
     rendition.on("selected", function(range, contents) {
@@ -206,6 +208,17 @@ book.ready.then(function() {
 
 var PAGE_CHANGED = false;
 rendition.on("relocated", function(location) {
+    if (!FIRST_LOAD_DONE) {
+        FIRST_LOAD_DONE = true;
+        // Does not work correctly after changing the font size for some books.
+        // Doing it again to make sure that the desired page is displayed. 
+        if (bookHistory && location.start.cfi != bookHistory.currentPage()) {
+            rendition.display(bookHistory.currentPage());
+        }
+
+        return;
+    }
+
     if (PAGE_CHANGED) {
         if (!resizeTimeout) {
             if (rendition && bookHistory) {
