@@ -112,8 +112,8 @@ let dictionaryHandler = debounce(function(range, contents) {
     try {
         let bounds = contents.window.getSelection().getRangeAt(0).getBoundingClientRect();
         let top = bounds.top + bounds.height
-        if (top + 110 >= window.innerHeight) {
-            top = bounds.top - 100;
+        if (top + 210 >= window.innerHeight) {
+            top = bounds.top - 200;
         }
 
         top = Math.ceil(top + 0.3);
@@ -204,6 +204,7 @@ book.ready.then(function() {
     };
 
     rendition.on("keyup", keyListener);
+    document.addEventListener("keyup", keyListener, false);
 });
 
 var PAGE_CHANGED = false;

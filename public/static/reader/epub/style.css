@@ -255,7 +255,7 @@ svg {
   border: 1px solid black;
   width: 95%;
   left: 2.5%;
-  height: 100px;
+  max-height: 200px;
   overflow: scroll;
   border-radius: 5px;
   display: none;

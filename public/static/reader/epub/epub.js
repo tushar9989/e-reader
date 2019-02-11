@@ -2006,7 +2006,6 @@ var EpubCFI = function () {
 				try {
 
 					if (start.terminal.offset != null) {
-						start.terminal.offset++;
 						range.setStart(startContainer, start.terminal.offset);
 					} else {
 						range.setStart(startContainer, 0);
@@ -4781,6 +4780,24 @@ var Contents = function () {
 				var range = new _epubcfi2.default(target).toRange(this.document, ignoreClass);
 
 				if (range) {
+					try {
+						if (!range.endContainer ||
+							(range.startContainer == range.endContainer 
+							&& range.startOffset == range.endOffset)) {
+							// If the end for the range is not set, it results in collapsed becoming
+							// true. This in turn leads to inconsistent behaviour when calling 
+							// getBoundingRect. Wrong bounds lead to the wrong page being displayed.
+							// https://developer.microsoft.com/en-us/microsoft-edge/platform/issues/15684911/
+							let pos = range.startContainer.textContent.indexOf(" ", range.startOffset);
+							if (pos == -1) {
+								pos = range.startContainer.textContent.length;
+							}
+							range.setEnd(range.startContainer, pos);
+						}
+					} catch (e) {
+						console.error("setting end offset to start container length failed", e);
+					}
+
 					if (range.startContainer.nodeType === Node.ELEMENT_NODE) {
 						position = range.startContainer.getBoundingClientRect();
 						targetPos.left = position.left;

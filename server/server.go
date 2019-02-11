@@ -10,9 +10,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/julienschmidt/httprouter"
 	"github.com/tushar9989/e-reader/book"
 	"github.com/tushar9989/e-reader/public"
-	"github.com/julienschmidt/httprouter"
 	"github.com/unrolled/render"
 )
 
@@ -192,7 +192,7 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, p httpro
 
 	_, err = io.Copy(w, data)
 	if err != nil {
-		handleError(w, r, err)
+		log.Printf("error writing data for request for %s: %v\n", r.URL.Path, err)
 		return
 	}
 
