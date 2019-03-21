@@ -13,7 +13,7 @@ if (id) {
     id = "/download/" + id + ".epub";
 }
 
-var book = ePub(id || "https://s3.amazonaws.com/moby-dick/moby-dick.epub");
+var book = ePub(id || "https://s3.amazonaws.com/moby-dick/moby-dick.epub", {store: true});
 var rendition = book.renderTo("viewer", {
     width: "100%",
     height: "100%"

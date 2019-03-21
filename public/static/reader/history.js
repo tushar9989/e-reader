@@ -45,6 +45,8 @@ function History(BOOK_ID) {
                         if (res.data) {
                             CURRENT_PAGE = res.data;
                             resolve(res.data);
+                        } else {
+                            reject("history not found");
                         }
                         
                         setTimeout(save, INTERVAL);
@@ -75,7 +77,7 @@ function History(BOOK_ID) {
 
                 NEEDS_UPDATE = false;
                 HISTORY_VERSION = JSON.parse(xhr.response).version;
-                setTimeout(save, 10000);
+                setTimeout(save, INTERVAL);
             }, {
                 "data": CURRENT_PAGE + "",
                 "version": HISTORY_VERSION
