@@ -48,19 +48,13 @@ if (localStorage.getItem('font-size')) {
     document.getElementById("font-size").value = +localStorage.getItem('font-size');
 }
 
-function dictionaryCallback(response) {
+function dictionaryCallback(xhr) {
     try {
         var meanings = [];
-        if (response.tuc && 
-            response.tuc.length > 0) {
-            for (let i = 0; i < response.tuc.length; i++) {
-                if (response.tuc[i].meanings && 
-                    response.tuc[i].meanings.length > 0) {
-                    for (let j = 0; j < response.tuc[i].meanings.length; j++) {
-                        meanings.push(response.tuc[i].meanings[j].text);
-                    }
-                }
-            }
+        var res = JSON.parse(xhr.response);
+        if (res.meanings && 
+            res.meanings.length > 0) {
+            meanings = res.meanings;
         }
 
         let hasResults = true;
@@ -132,15 +126,39 @@ let dictionaryHandler = debounce(function(range, contents) {
         // Trim spaces
         text = text.trim();
 
-        var script = document.createElement("script");
-        script.type = "text/javascript";
-        script.src = "https://glosbe.com/gapi/translate?from=eng&dest=eng&format=json&phrase=" + encodeURIComponent(text) + "&callback=dictionaryCallback";
-        document.head.appendChild(script);
+        makeRequest(
+            "/dictionary/" + encodeURIComponent(text),
+            "GET",
+            dictionaryCallback
+        )
     } catch (error) {
         console.error(error);
     } 
 }, 1000);
 
+function makeRequest(url, method, callback, data) {
+    var xhr = new XMLHttpRequest();
+    xhr.open(method, url, true);
+    xhr.onload = function() {
+        if (xhr.readyState === 4) {
+            callback(xhr);
+        } else {
+            console.error(xhr.statusText);
+        }
+    };
+
+    xhr.onerror = function() {
+        console.error(xhr.statusText);
+    };
+
+    if (data == undefined) {
+        xhr.send(null);
+    } else {
+        xhr.send(JSON.stringify(data))
+    }
+}
+
+// TODO: Get book progress to the UI
 book.ready.then(function() {
     if (bookHistory) {
         bookHistory.get().then(

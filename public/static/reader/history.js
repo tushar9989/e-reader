@@ -56,6 +56,7 @@ function History(BOOK_ID) {
         );
     }
 
+    // TODO: handle failures better and have option on UI to restart the automatic saving routine
     function save() {
         if (!NEEDS_UPDATE) {
             setTimeout(save, INTERVAL);

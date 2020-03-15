@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"regexp"
@@ -18,28 +19,30 @@ import (
 
 // Server is a BookBrowser server.
 type Server struct {
-	Addr     string
-	Verbose  bool
-	router   *httprouter.Router
-	render   *render.Render
-	repo     book.Repository
-	bookPath string
+	Addr            string
+	Verbose         bool
+	router          *httprouter.Router
+	render          *render.Render
+	repo            book.Repository
+	bookPath        string
+	dictionaryToken string
 }
 
 // NewServer creates a new BookBrowser server.
 func NewServer(
-	addr string, verbose bool, token string, historyPrefix string, bookPath string,
+	addr string, verbose bool, token string, historyPrefix string, bookPath string, dictionaryToken string,
 ) *Server {
 	if verbose {
 		log.Printf("Supported formats: %s", ".pdf")
 	}
 
 	s := &Server{
-		Addr:     addr,
-		Verbose:  verbose,
-		router:   httprouter.New(),
-		repo:     book.NewDropboxRepository(token, historyPrefix),
-		bookPath: bookPath,
+		Addr:            addr,
+		Verbose:         verbose,
+		router:          httprouter.New(),
+		repo:            book.NewDropboxRepository(token, historyPrefix),
+		bookPath:        bookPath,
+		dictionaryToken: dictionaryToken,
 	}
 
 	s.initRender()
@@ -95,6 +98,7 @@ func (s *Server) initRouter() {
 	s.router.GET("/download/:id", s.handleDownload)
 	s.router.GET("/history/get/:id", s.handleHistoryGet)
 	s.router.POST("/history/set/:id", s.handleHistoryUpdate)
+	s.router.GET("/dictionary/:word", s.handleDictionary)
 
 	s.router.GET("/static/*filepath", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		http.FileServer(public.Box).ServeHTTP(w, req)
@@ -170,6 +174,8 @@ func (s *Server) handleHistoryGet(w http.ResponseWriter, req *http.Request, ps h
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	// TODO: move this to a phased download that can be cached at the client side
+	// TODO: have more book metadata such as the number of pages so that we can show current progress at the client side
 	id := p.ByName("id")
 	id = strings.TrimRight(id, ".epub")
 	book, data, err := s.repo.Download(id)
@@ -197,6 +203,57 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request, p httpro
 	}
 
 	return
+}
+
+type dictionaryResponse struct {
+	ShortDef []string `json:"shortdef"`
+}
+
+type DictionaryResponse struct {
+	Meanings []string `json:"meanings"`
+}
+
+func (s *Server) handleDictionary(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	word := ps.ByName("word")
+	word = strings.Replace(word, " ", "%20", -1)
+
+	url := fmt.Sprintf("https://dictionaryapi.com/api/v3/references/collegiate/json/%s?key=%s", word, s.dictionaryToken)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	var t []dictionaryResponse
+	err = json.Unmarshal(body, &t)
+	if err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	var finalResp DictionaryResponse
+	for _, item := range t {
+		for _, meaning := range item.ShortDef {
+			finalResp.Meanings = append(finalResp.Meanings, meaning)
+		}
+	}
+
+	var jsonBytes []byte
+	if jsonBytes, err = json.Marshal(finalResp); err != nil {
+		handleError(w, r, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	io.WriteString(w, string(jsonBytes))
 }
 
 func (s *Server) handleBooks(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
