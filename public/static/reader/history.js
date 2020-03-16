@@ -56,7 +56,6 @@ function History(BOOK_ID) {
         );
     }
 
-    // TODO: handle failures better and have option on UI to restart the automatic saving routine
     function save() {
         if (!NEEDS_UPDATE) {
             setTimeout(save, INTERVAL);
@@ -68,10 +67,7 @@ function History(BOOK_ID) {
             "POST",
             function(xhr) {
                 if (xhr.status !== 201) {
-                    var snackbar = document.getElementById("snackbar");
-                    snackbar.classList.toggle('show');
-                    snackbar.innerHTML = "save history failed. message: " + xhr.response;
-
+                    showHistoryFailedMessage(xhr.response);
                     console.error("save history failed.", xhr.statusText);
                     return;
                 }
@@ -82,8 +78,22 @@ function History(BOOK_ID) {
             }, {
                 "data": CURRENT_PAGE + "",
                 "version": HISTORY_VERSION
+            }, function(reason) {
+                showHistoryFailedMessage(reason);
             }
         )
+    }
+
+    function showHistoryFailedMessage(message) {
+        var snackbar = document.getElementById("snackbar");
+        snackbar.classList.toggle('show');
+        snackbar.innerHTML = "save history failed. message: " + message + "<br>retry";
+
+        snackbar.addEventListener('click', function listener() {
+            save();
+            snackbar.classList.toggle('show');
+            this.removeEventListener('click', listener, false);
+        }, false);
     }
 
     function debounce(func, wait, immediate) {
@@ -102,7 +112,7 @@ function History(BOOK_ID) {
         };
     }
 
-    function makeRequest(url, method, callback, data) {
+    function makeRequest(url, method, callback, data, failureCallback) {
         var xhr = new XMLHttpRequest();
         xhr.open(method, url, true);
         xhr.onload = function() {
@@ -115,6 +125,7 @@ function History(BOOK_ID) {
 
         xhr.onerror = function() {
             console.error(xhr.statusText);
+            failureCallback(xhr.statusText);
         };
 
         if (data == undefined) {
